@@ -7,6 +7,8 @@ import {
   Patch,
   UseGuards,
   Request,
+  Query,
+  Delete,
 } from '@nestjs/common';
 import { FriendService } from '../../services/friend/friend.service';
 import { JwtAuthGuard } from 'src/modules/auth/gurds/auth.guard';
@@ -44,10 +46,16 @@ export class FriendController {
     return this.friendService.blockUser(userId, friendId, reason);
   }
 
+  @Delete('request/:requestId')
+  async deleteFriendRequestById(
+    @Param('requestId') friendRequestId: string,
+  ): Promise<void> {
+    await this.friendService.deleteFriendRequestById(friendRequestId);
+  }
+
   @Get('list')
-  async listFriends(@Request() req: any) {
-    const userId = req.userId;
-    return this.friendService.listFriends(userId);
+  async listFriends(@Request() req: any, @Query('userId') userId?: string) {
+    return this.friendService.listFriends(userId ? userId : req.userId);
   }
 
   @Get('pending-requests')

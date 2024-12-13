@@ -76,6 +76,20 @@ export class FriendService {
     return this.friendRepository.save(friendConnection);
   }
 
+  async deleteFriendRequestById(friendRequestId: string): Promise<void> {
+    // Find the friend request by its ID
+    const friendRequest = await this.friendRepository.findOne({
+      where: { id: friendRequestId },
+    });
+
+    // Throw an error if the request is not found or is not pending
+    if (!friendRequest) {
+      throw new NotFoundException('Pending friend request not found');
+    }
+
+    await this.friendRepository.remove(friendRequest);
+  }
+
   async listFriends(userId: string): Promise<Friend[]> {
     return this.friendRepository.find({
       where: [
