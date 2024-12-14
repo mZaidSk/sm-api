@@ -26,9 +26,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly notificationService: NotificationService,
   ) {}
 
-  /**
-   * Handle user connection.
-   */
+  private userSockets: Map<string, string> = new Map();
+
+  // Handle user connection
   async handleConnection(client: Socket) {
     const userId = this.getUserIdFromSocket(client);
     if (!userId) {
@@ -38,16 +38,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     await this.userService.updateStatus(userId, 'ACTIVE');
     this.server.emit('userStatusUpdated', { userId, status: 'ACTIVE' });
+
+    // Store the mapping of userId to socketId
+    this.userSockets.set(userId, client.id);
   }
 
-  /**
-   * Handle user disconnection.
-   */
+  // Handle user disconnection
   async handleDisconnect(client: Socket) {
     const userId = this.getUserIdFromSocket(client);
     if (userId) {
       await this.userService.updateStatus(userId, 'INACTIVE');
       this.server.emit('userStatusUpdated', { userId, status: 'INACTIVE' });
+
+      // Remove the mapping when the user disconnects
+      this.userSockets.delete(userId);
     }
   }
 
@@ -102,9 +106,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('userLeftChat', { chatId: payload.chatId, userId });
   }
 
-  /**
-   * Send a message to a chat.
-   */
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     client: Socket,
@@ -129,9 +130,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const participants = await this.chatService.getChatParticipants(
       payload.chatId,
     );
+
+    console.log(participants);
     participants.forEach(async (participant) => {
+      console.log(`Sending message to user with ID: ${participant.user.id}`);
+
       if (participant.user.id !== senderId) {
-        this.server.to(participant.user.id).emit('receiveMessage', message);
+        const socketId = this.userSockets.get(participant?.user?.id); // Get the socket ID
+
+        if (socketId) {
+          // Send the message using the socket ID
+          this.server.to(socketId).emit('receiveMessage', message);
+        }
 
         // Notify offline users
         if (participant.user.status === 'INACTIVE') {
@@ -146,27 +156,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit('messageSent', { message });
   }
 
-  /**
-   * Receive unread messages.
-   */
-  @SubscribeMessage('receiveMessage')
-  async handleReceiveMessage(client: Socket, payload: { chatId: string }) {
-    const userId = this.getUserIdFromSocket(client);
-    if (!userId) {
-      client.disconnect();
-      return;
-    }
-
-    const messages = await this.messageService.getUnreadMessages(
-      payload.chatId,
-      userId,
-    );
-    client.emit('messagesReceived', { chatId: payload.chatId, messages });
-  }
-
-  /**
-   * Extract the user ID from the WebSocket connection.
-   */
   private getUserIdFromSocket(client: Socket): string | null {
     const token: string = client.handshake.query.token as string;
     return this.authService.getUserFromToken(token);

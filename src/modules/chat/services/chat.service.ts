@@ -93,14 +93,34 @@ export class ChatService {
     }
   }
 
-  async getUserChats(userId: string): Promise<Chat[]> {
+  async getUserChats(userId: string): Promise<any[]> {
+    // Find all participant records for the user
     const participantRecords = await this.participantRepository.find({
       where: { user: { id: userId } },
-      relations: ['chat'],
+      relations: ['chat', 'chat.participants', 'chat.participants.user'], // Load related data
     });
 
-    // Extract and return the chats from the participant records
-    return participantRecords.map((participant) => participant.chat);
+    // Process each chat to include relevant details
+    const chats = participantRecords.map((participant) => {
+      const chat = participant.chat;
+
+      // For direct chats, include details of the other user
+      if (chat.chatType === 'DIRECT') {
+        const otherParticipant = chat.participants.find(
+          (p) => p.user.id !== userId,
+        );
+
+        return {
+          ...chat,
+          otherUser: otherParticipant ? otherParticipant.user : null, // Add other user's details
+        };
+      }
+
+      // For group chats, return the chat as-is
+      return chat;
+    });
+
+    return chats;
   }
 
   async getChatParticipants(chatId: string): Promise<Participant[]> {

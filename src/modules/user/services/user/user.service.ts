@@ -35,12 +35,12 @@ export class UserService {
     if (!user) return null;
 
     // If no authUserId is provided, we assume it's for the authenticated user's own info
-    if (!authUserId || authUserId === id) {
-      return {
-        ...user,
-        friend: undefined, // No friend status for self
-      };
-    }
+    // if (!authUserId || authUserId === id) {
+    //   return {
+    //     ...user,
+    //     friend: undefined, // No friend status for self
+    //   };
+    // }
 
     // Fetch the friend status
     const friend = await this.userRepository
@@ -71,6 +71,12 @@ export class UserService {
       )
       .where('user.id = :id', { id })
       .getOne();
+
+    if (!authUserId || authUserId === id) {
+      return {
+        ...detailedUser,
+      };
+    }
 
     return {
       ...detailedUser,
@@ -108,9 +114,21 @@ export class UserService {
     return user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    await this.userRepository.update(id, updateUserDto);
-    return this.findOne(id);
+  async editUser(id: string, editUserDto: UpdateUserDto): Promise<User> {
+    // Find the user by ID
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user) {
+      throw new Error('User not found'); // Handle appropriately, e.g., using a custom exception
+    }
+
+    // Update only the specified fields
+    Object.assign(user, editUserDto);
+
+    // Save the updated user entity
+    await this.userRepository.save(user);
+
+    return user;
   }
 
   async remove(id: string): Promise<void> {

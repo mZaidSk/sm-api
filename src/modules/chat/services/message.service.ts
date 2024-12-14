@@ -1,3 +1,4 @@
+import { UserService } from './../../user/services/user/user.service';
 import { ChatService } from './chat.service';
 import {
   Injectable,
@@ -19,6 +20,7 @@ export class MessageService {
     private readonly messageStatusRepository: Repository<MessageStatus>,
 
     private readonly chatService: ChatService,
+    private readonly userService: UserService,
   ) {}
 
   async createMessage(payload: {
@@ -35,10 +37,17 @@ export class MessageService {
       throw new BadRequestException('Invalid message payload.');
     }
 
-    // 1. Save the message to the database
+    // 1. Retrieve the sender user entity
+    const sender = await this.userService.findOne(senderId); // Fetch the sender by ID
+
+    if (!sender) {
+      throw new NotFoundException('Sender not found');
+    }
+
+    // 3. Create the message with sender information
     const message = this.messageRepository.create({
-      chat: { id: chatId }, // Ensure relations are correctly set up in the entity
-      sender: { id: senderId }, // Assuming `sender` is a relation to User
+      chat: { id: chatId }, // Directly associating the chat
+      sender, // Directly associating the sender
       content,
       messageType,
       mediaUrl: mediaUrl || null,
@@ -49,14 +58,14 @@ export class MessageService {
 
     const savedMessage = await this.messageRepository.save(message);
 
-    // 2. Get chat participants
+    // 4. Get chat participants and create message status entries
     const participants = await this.chatService.getChatParticipants(chatId);
 
     if (!participants || participants.length === 0) {
       throw new NotFoundException('No participants found for the chat.');
     }
 
-    // 3. Create message status entries for each participant
+    // 5. Create message status entries for each participant
     const messageStatuses = participants.map((participant) =>
       this.messageStatusRepository.create({
         message: savedMessage,
@@ -68,7 +77,7 @@ export class MessageService {
 
     await this.messageStatusRepository.save(messageStatuses);
 
-    // 4. Return the created message
+    // 6. Return the created message with sender info attached
     return savedMessage;
   }
 
